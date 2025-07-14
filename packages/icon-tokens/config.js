@@ -1,0 +1,23 @@
+import StyleDictionary from 'style-dictionary';
+
+export default {
+  source: ['tokens/**/*.json'],
+  platforms: {
+    css: {
+      transformGroup: 'css',
+      buildPath: 'build/css/',
+      files: [{
+        destination: 'tokens.css',
+        format: 'css/variables'
+      }]
+    },
+    js: {
+      transformGroup: 'js',
+      buildPath: 'build/js/',
+      files: [{
+        destination: 'tokens.js',
+        format: 'javascript/es6'
+      }]
+    }
+  }
+};
