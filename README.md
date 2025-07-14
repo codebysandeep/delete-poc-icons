@@ -1,90 +1,83 @@
 # DeletePocIcons
 
-<a alt="Nx logo" href="https://nx.dev" target="_blank" rel="noreferrer"><img src="https://raw.githubusercontent.com/nrwl/nx/master/images/nx-logo.png" width="45"></a>
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-✨ Your new, shiny [Nx workspace](https://nx.dev) is almost ready ✨.
+## Project Overview
 
-[Learn more about this workspace setup and its capabilities](https://nx.dev/nx-api/js?utm_source=nx_project&amp;utm_medium=readme&amp;utm_campaign=nx_projects) or run `npx nx graph` to visually explore what was created. Now, let's get you up to speed!
+This is an Nx workspace project focused on icon tokenization and transformation using Style Dictionary v5. The main purpose is to convert SVG icons into multiple output formats (JavaScript modules, PNG files, icon fonts, and web components).
 
-## Finish your CI setup
+## Architecture
 
-[Click here to finish setting up your workspace!](https://cloud.nx.app/connect/e6Hlmo1cYg)
+- **Monorepo Structure**: Uses Nx workspace with packages in `packages/` directory
+- **Icon Processing Pipeline**: Built around Style Dictionary v5 with custom transforms, formats, and actions
+- **Multi-format Output**: Generates SVG JavaScript modules, PNG rasters, icon fonts, and web components from source SVG files
 
+### Key Components
 
-## Generate a library
+- `packages/icon-tokens/`: Main icon processing package containing:
+  - `assets/`: Source SVG files (e.g., humberger.svg, ice-cream.svg)
+  - `tokens/icons.json`: Token definitions mapping icon names to SVG files
+  - `config.js`: Style Dictionary configuration with custom transforms and build pipeline
+  - `dist/`: Generated output directory (SVG, PNG, fonts, web components)
 
-```sh
-npx nx g @nx/js:lib packages/pkg1 --publishable --importPath=@my-org/pkg1
+## Common Commands
+
+### Building Icons
+```bash
+# Build all icon formats
+cd packages/icon-tokens && npm run build
+
+# Build specific formats
+cd packages/icon-tokens && npm run build:svg     # SVG JavaScript modules only
+cd packages/icon-tokens && npm run build:png     # PNG files only  
+cd packages/icon-tokens && npm run build:font    # Icon font files only
+cd packages/icon-tokens && npm run build:webcomponent # Web components only
 ```
 
-## Run tasks
+### Nx Commands
+```bash
+# Run tasks for specific projects
+npx nx build <project-name>
+npx nx typecheck <project-name>
 
-To build the library use:
-
-```sh
-npx nx build pkg1
-```
-
-To run any task with Nx use:
-
-```sh
-npx nx <target> <project-name>
-```
-
-These targets are either [inferred automatically](https://nx.dev/concepts/inferred-tasks?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects) or defined in the `project.json` or `package.json` files.
-
-[More about running tasks in the docs &raquo;](https://nx.dev/features/run-tasks?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
-
-## Versioning and releasing
-
-To version and release the library use
-
-```
-npx nx release
-```
-
-Pass `--dry-run` to see what would happen without actually releasing the library.
-
-[Learn more about Nx release &raquo;](https://nx.dev/features/manage-releases?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
-
-## Keep TypeScript project references up to date
-
-Nx automatically updates TypeScript [project references](https://www.typescriptlang.org/docs/handbook/project-references.html) in `tsconfig.json` files to ensure they remain accurate based on your project dependencies (`import` or `require` statements). This sync is automatically done when running tasks such as `build` or `typecheck`, which require updated references to function correctly.
-
-To manually trigger the process to sync the project graph dependencies information to the TypeScript project references, run the following command:
-
-```sh
+# Sync TypeScript project references
 npx nx sync
+
+# Visualize project graph
+npx nx graph
+
+# Release management
+npx nx release --dry-run
 ```
 
-You can enforce that the TypeScript project references are always in the correct state when running in CI by adding a step to your CI job configuration that runs the following command:
+## Icon Workflow
 
-```sh
-npx nx sync:check
+1. **Add New Icons**: Place SVG files in `packages/icon-tokens/assets/`
+2. **Register Icons**: Add entries to `packages/icon-tokens/tokens/icons.json` with type "asset"
+3. **Build**: Run `npm run build` in the icon-tokens package to generate all formats
+4. **Output**: Generated files appear in `packages/icon-tokens/dist/` with subdirectories for each format
+
+## Development Notes
+
+- SVG files must be placed in `packages/icon-tokens/assets/` directory
+- Icon token definitions use type "asset" in the JSON configuration
+- The build process uses Style Dictionary v5 with extensive custom transforms for SVG processing, PNG generation via Sharp, and font generation via webfont library
+- Generated web components use shadow DOM and support size/color attributes
+- Font generation creates WOFF2, WOFF, and TTF formats with corresponding CSS classes
+
+## Output Structure
 ```
-
-[Learn more about nx sync](https://nx.dev/reference/nx-commands#sync)
-
-
-[Learn more about Nx on CI](https://nx.dev/ci/intro/ci-with-nx#ready-get-started-with-your-provider?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
-
-## Install Nx Console
-
-Nx Console is an editor extension that enriches your developer experience. It lets you run tasks, generate code, and improves code autocompletion in your IDE. It is available for VSCode and IntelliJ.
-
-[Install Nx Console &raquo;](https://nx.dev/getting-started/editor-setup?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
-
-## Useful links
-
-Learn more:
-
-- [Learn more about this workspace setup](https://nx.dev/nx-api/js?utm_source=nx_project&amp;utm_medium=readme&amp;utm_campaign=nx_projects)
-- [Learn about Nx on CI](https://nx.dev/ci/intro/ci-with-nx?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
-- [Releasing Packages with Nx release](https://nx.dev/features/manage-releases?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
-- [What are Nx plugins?](https://nx.dev/concepts/nx-plugins?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
-
-And join the Nx community:
-- [Discord](https://go.nx.dev/community)
-- [Follow us on X](https://twitter.com/nxdevtools) or [LinkedIn](https://www.linkedin.com/company/nrwl)
-- [Our Youtube channel](https://www.youtube.com/@nxdevtools)
-- [Our blog](https://nx.dev/blog?utm_source=nx_project&utm_medium=readme&utm_campaign=nx_projects)
+packages/icon-tokens/dist/
+├── svg/
+│   ├── icons.js         # JavaScript module with all icons
+│   └── *.svg           # Individual SVG files
+├── png/
+│   └── *-{size}.png    # PNG files in multiple sizes (16, 24, 32, 48, 64)
+├── fonts/
+│   ├── MyIconFont.woff2
+│   ├── MyIconFont.woff
+│   ├── MyIconFont.ttf
+│   └── MyIconFont.css   # CSS with icon classes
+└── webcomponents/
+    └── icons.js         # Web component implementation
+```

@@ -1,0 +1,14 @@
+{
+  "icon": {
+    "hamburger": {
+      "value": "hamburger.svg",
+      "type": "asset",
+      "description": "Hamburger menu icon"
+    },
+    "ice-cream": {
+      "value": "ice-cream.svg",
+      "type": "asset",
+      "description": "Ice cream icon"
+    }
+  }
+}

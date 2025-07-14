@@ -1,11 +1,19 @@
 {
   "name": "icon-tokens",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
-  "type": "module",
+  "description": "Icon token generation using Style Dictionary",
+  "main": "config.js",
   "scripts": {
-    "build": "style-dictionary build --config ./config.js"
+    "build": "node config.js",
+    "build:svg": "node config.js svg",
+    "build:png": "node config.js png",
+    "build:font": "node config.js font",
+    "build:webcomponent": "node config.js webcomponent"
+  },
+  "dependencies": {
+    "style-dictionary": "^5.0.1",
+    "sharp": "^0.33.0",
+    "webfont": "^11.2.26"
   },
   "author": "",
   "license": "Apache-2.0"
