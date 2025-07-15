@@ -5,7 +5,10 @@
       "Bash(npm run build:*)",
       "Bash(node:*)",
       "Bash(rm:*)",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "Bash(mkdir:*)",
+      "Bash(mv:*)",
+      "Bash(touch:*)"
     ],
     "deny": []
   }

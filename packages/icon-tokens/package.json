@@ -8,12 +8,22 @@
     "build:svg": "node config.js svg",
     "build:png": "node config.js png",
     "build:font": "node config.js font",
-    "build:webcomponent": "node config.js webcomponent"
+    "build:webcomponent": "node config.js webcomponent",
+    "build:multi": "node config-multi-brand.js",
+    "build:multi:svg": "node config-multi-brand.js svg",
+    "build:multi:png": "node config-multi-brand.js png",
+    "build:multi:font": "node config-multi-brand.js font",
+    "build:multi:webcomponent": "node config-multi-brand.js webcomponent",
+    "sync": "node src/scripts/sync-figma-icons.js",
+    "sync:dry-run": "node src/scripts/sync-figma-icons.js --dry-run",
+    "sync:verbose": "node src/scripts/sync-figma-icons.js --verbose",
+    "setup:gitlab": "node ../../setup-gitlab-migration.js"
   },
   "dependencies": {
     "style-dictionary": "^5.0.1",
     "sharp": "^0.33.0",
-    "webfont": "^11.2.26"
+    "webfont": "^11.2.26",
+    "axios": "^1.6.0"
   },
   "author": "",
   "license": "Apache-2.0"

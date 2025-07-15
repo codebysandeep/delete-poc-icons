@@ -1,0 +1,78 @@
+name: Mirror to GitLab
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' # Only mirror on push, not PR
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0 # Full history for complete mirror
+        
+    - name: Configure Git
+      run: |
+        git config --global user.name "GitHub Action"
+        git config --global user.email "action@github.com"
+    
+    - name: Mirror to GitLab
+      env:
+        GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
+        GITLAB_REPO: ${{ secrets.GITLAB_REPO }} # e.g., gitlab.com/username/repo.git
+      run: |
+        echo "🔄 Mirroring to GitLab..."
+        
+        # Add GitLab remote
+        git remote add gitlab https://oauth2:$GITLAB_TOKEN@$GITLAB_REPO
+        
+        # Push all branches
+        git push gitlab --all --force
+        
+        # Push all tags
+        git push gitlab --tags --force
+        
+        echo "✅ Mirror completed successfully"
+
+    - name: Trigger GitLab Pipeline
+      env:
+        GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
+        GITLAB_PROJECT_ID: ${{ secrets.GITLAB_PROJECT_ID }}
+      run: |
+        echo "🚀 Triggering GitLab pipeline..."
+        
+        # Trigger pipeline using GitLab API
+        response=$(curl -s -X POST \
+          -H "PRIVATE-TOKEN: $GITLAB_TOKEN" \
+          -H "Content-Type: application/json" \
+          -d '{"ref":"main","variables":[{"key":"TRIGGERED_BY","value":"github-mirror"}]}' \
+          "https://gitlab.com/api/v4/projects/$GITLAB_PROJECT_ID/pipeline")
+        
+        # Extract pipeline ID from response
+        pipeline_id=$(echo $response | jq -r '.id')
+        
+        if [ "$pipeline_id" != "null" ]; then
+          echo "✅ Pipeline triggered successfully: $pipeline_id"
+          echo "🔗 Pipeline URL: https://gitlab.com/api/v4/projects/$GITLAB_PROJECT_ID/pipelines/$pipeline_id"
+        else
+          echo "⚠️ Pipeline trigger response: $response"
+        fi
+
+    - name: Update Mirror Status
+      if: always()
+      run: |
+        if [ "${{ job.status }}" = "success" ]; then
+          echo "✅ Mirror Status: SUCCESS"
+          echo "📅 Mirror Time: $(date -u)"
+          echo "🔗 GitLab Project: https://gitlab.com/-/projects/${{ secrets.GITLAB_PROJECT_ID }}"
+        else
+          echo "❌ Mirror Status: FAILED"
+          echo "📅 Mirror Time: $(date -u)"
+          echo "🔍 Check logs for details"
+        fi

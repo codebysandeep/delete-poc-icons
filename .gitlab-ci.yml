@@ -1,27 +1,367 @@
-image: node:20
-variables:
-  CI: 'true'
+# GitLab CI/CD Pipeline for Icon Design System
+# This pipeline syncs icons from Figma, builds brand-specific packages, and publishes them
 
-# Main job
-CI:
-  interruptible: true
+# Global variables and configuration
+variables:
+  NODE_VERSION: "18"
+  CACHE_KEY: "icon-tokens-v1"
+  FIGMA_FILE_KEY: "" # Set in GitLab CI/CD Variables
+  FIGMA_ACCESS_TOKEN: "" # Set in GitLab CI/CD Variables (masked)
+  FIGMA_WEBHOOK_SECRET: "" # Set in GitLab CI/CD Variables (masked)
+  GITLAB_TOKEN: "" # Set in GitLab CI/CD Variables (masked)
+  
+# Cache configuration
+.cache_config: &cache_config
+  cache:
+    key: "$CACHE_KEY"
+    paths:
+      - node_modules/
+      - packages/*/node_modules/
+      - .npm/
+    policy: pull-push
+
+# Base job template
+.base_job:
+  image: node:$NODE_VERSION
+  before_script:
+    - npm ci --cache .npm --prefer-offline
+    - cd packages/icon-tokens
+    - npm ci --cache ../../.npm --prefer-offline
+  <<: *cache_config
+
+# Security validation job
+validate_security:
+  extends: .base_job
+  stage: validate
+  script:
+    - echo "🔐 Validating security configuration..."
+    - |
+      # Check required environment variables
+      if [ -z "$FIGMA_FILE_KEY" ]; then
+        echo "❌ FIGMA_FILE_KEY is not set"
+        exit 1
+      fi
+      if [ -z "$FIGMA_ACCESS_TOKEN" ]; then
+        echo "❌ FIGMA_ACCESS_TOKEN is not set"
+        exit 1
+      fi
+      if [ -z "$GITLAB_TOKEN" ]; then
+        echo "❌ GITLAB_TOKEN is not set"
+        exit 1
+      fi
+      echo "✅ All required environment variables are set"
+    - |
+      # Validate Figma file key format
+      if [[ ! "$FIGMA_FILE_KEY" =~ ^[a-zA-Z0-9]{22}$ ]]; then
+        echo "❌ Invalid Figma file key format"
+        exit 1
+      fi
+      echo "✅ Figma file key format is valid"
+    - echo "🔐 Security validation completed"
   only:
     - main
     - merge_requests
+    - schedules
+
+# Figma sync job
+sync_figma:
+  extends: .base_job
+  stage: sync
   script:
-    # This enables task distribution via Nx Cloud
-    # Run this command as early as possible, before dependencies are installed
-    # Learn more at https://nx.dev/ci/reference/nx-cloud-cli#npx-nxcloud-startcirun
-    # Uncomment this line to enable task distribution
-    # - npx nx start-ci-run --distribute-on="3 linux-medium-js" --stop-agents-after="build"
+    - echo "📥 Syncing icons from Figma..."
+    - |
+      # Set environment variables for the sync script
+      export FIGMA_FILE_KEY="$FIGMA_FILE_KEY"
+      export FIGMA_ACCESS_TOKEN="$FIGMA_ACCESS_TOKEN"
+    - |
+      # Run sync with error handling
+      if npm run sync:verbose; then
+        echo "✅ Figma sync completed successfully"
+      else
+        echo "❌ Figma sync failed"
+        exit 1
+      fi
+    - |
+      # Check if any files were changed
+      if git diff --quiet; then
+        echo "ℹ️ No changes from Figma sync"
+        echo "SYNC_CHANGES=false" >> sync_status.env
+      else
+        echo "📝 Changes detected from Figma sync"
+        echo "SYNC_CHANGES=true" >> sync_status.env
+        git add assets/ tokens/
+        git status --porcelain
+      fi
+  artifacts:
+    reports:
+      dotenv: packages/icon-tokens/sync_status.env
+    paths:
+      - packages/icon-tokens/assets/
+      - packages/icon-tokens/tokens/
+    expire_in: 1 hour
+  only:
+    - main
+    - schedules
+  dependencies:
+    - validate_security
 
-    - npm ci --legacy-peer-deps
+# Build job
+build_icons:
+  extends: .base_job
+  stage: build
+  script:
+    - echo "🔨 Building icon packages..."
+    - |
+      # Build all brand packages
+      if npm run build:multi; then
+        echo "✅ Icon build completed successfully"
+      else
+        echo "❌ Icon build failed"
+        exit 1
+      fi
+    - |
+      # Generate build summary
+      echo "📊 Build Summary:"
+      find dist -name "package.json" -exec echo "  📦 {}" \;
+      echo "  Total brands: $(find dist -maxdepth 1 -type d | wc -l)"
+      echo "  Total packages: $(find dist -name "package.json" | wc -l)"
+  artifacts:
+    paths:
+      - packages/icon-tokens/dist/
+    expire_in: 1 hour
+  dependencies:
+    - sync_figma
 
-    # Prepend any command with "nx-cloud record --" to record its logs to Nx Cloud
-    # - npx nx-cloud record -- echo Hello World
-    # As your workspace grows, you can change this to use Nx Affected to run only tasks affected by the changes in this PR/commit. Learn more: https://nx.dev/ci/features/affected
-    - npx nx run-many -t lint test build
-    # Nx Cloud recommends fixes for failures to help you get CI green faster. Learn more: https://nx.dev/ci/features/self-healing-ci
+# Test job
+test_packages:
+  extends: .base_job
+  stage: test
+  script:
+    - echo "🧪 Testing generated packages..."
+    - |
+      # Validate package.json files
+      for package_file in $(find dist -name "package.json"); do
+        echo "Validating $package_file"
+        if ! node -e "JSON.parse(require('fs').readFileSync('$package_file', 'utf8'))"; then
+          echo "❌ Invalid package.json: $package_file"
+          exit 1
+        fi
+      done
+      echo "✅ All package.json files are valid"
+    - |
+      # Test SVG files
+      svg_count=$(find dist -name "*.svg" | wc -l)
+      if [ $svg_count -eq 0 ]; then
+        echo "❌ No SVG files found"
+        exit 1
+      fi
+      echo "✅ Found $svg_count SVG files"
+    - |
+      # Test generated fonts
+      font_count=$(find dist -name "*.woff2" | wc -l)
+      echo "ℹ️ Found $font_count font files"
+    - |
+      # Test web components
+      webcomp_count=$(find dist -path "*/webcomponents/*.js" | wc -l)
+      echo "ℹ️ Found $webcomp_count web component files"
+    - echo "🧪 Package testing completed"
+  dependencies:
+    - build_icons
 
-  after_script:
-    - npx nx fix-ci
+# Publish job
+publish_packages:
+  extends: .base_job
+  stage: publish
+  script:
+    - echo "📦 Publishing packages to GitLab Package Registry..."
+    - |
+      # Configure npm for GitLab Package Registry
+      echo "@your-org:registry=https://gitlab.com/api/v4/projects/$CI_PROJECT_ID/packages/npm/" > .npmrc
+      echo "//gitlab.com/api/v4/projects/$CI_PROJECT_ID/packages/npm/:_authToken=$GITLAB_TOKEN" >> .npmrc
+    - |
+      # Publish each brand package
+      published_count=0
+      failed_count=0
+      
+      for brand_dir in $(find dist -maxdepth 1 -type d -not -path dist); do
+        brand_name=$(basename "$brand_dir")
+        echo "Publishing $brand_name..."
+        
+        cd "$brand_dir"
+        
+        # Check if package already exists
+        package_name=$(node -e "console.log(require('./package.json').name)")
+        package_version=$(node -e "console.log(require('./package.json').version)")
+        
+        if npm view "$package_name@$package_version" > /dev/null 2>&1; then
+          echo "⚠️ Package $package_name@$package_version already exists, skipping..."
+        else
+          if npm publish; then
+            echo "✅ Published $package_name@$package_version"
+            published_count=$((published_count + 1))
+          else
+            echo "❌ Failed to publish $package_name@$package_version"
+            failed_count=$((failed_count + 1))
+          fi
+        fi
+        
+        cd - > /dev/null
+      done
+      
+      echo "📊 Publishing Summary:"
+      echo "  Published: $published_count"
+      echo "  Failed: $failed_count"
+      echo "  Total processed: $((published_count + failed_count))"
+      
+      if [ $failed_count -gt 0 ]; then
+        echo "❌ Some packages failed to publish"
+        exit 1
+      fi
+      
+      echo "✅ All packages published successfully"
+  only:
+    - main
+  dependencies:
+    - test_packages
+  when: manual
+
+# Commit changes job (only if sync detected changes)
+commit_changes:
+  extends: .base_job
+  stage: commit
+  script:
+    - echo "📝 Committing synchronized changes..."
+    - |
+      # Configure git
+      git config user.name "GitLab CI"
+      git config user.email "ci@gitlab.com"
+    - |
+      # Check if there are changes to commit
+      if [ "$SYNC_CHANGES" = "true" ]; then
+        # Create commit message
+        commit_message="sync: update icons from Figma
+
+        🤖 Automated sync from Figma
+        
+        - Updated icons from Figma file: $FIGMA_FILE_KEY
+        - Synchronized at: $(date -u +"%Y-%m-%d %H:%M:%S UTC")
+        - Pipeline: $CI_PIPELINE_URL
+        
+        🤖 Generated with GitLab CI/CD"
+        
+        # Commit changes
+        git add assets/ tokens/
+        git commit -m "$commit_message"
+        
+        # Push changes
+        git push origin HEAD:$CI_COMMIT_REF_NAME
+        
+        echo "✅ Changes committed and pushed"
+      else
+        echo "ℹ️ No changes to commit"
+      fi
+  only:
+    - main
+    - schedules
+  dependencies:
+    - sync_figma
+
+# Cleanup job
+cleanup:
+  extends: .base_job
+  stage: cleanup
+  script:
+    - echo "🧹 Cleaning up temporary files..."
+    - rm -rf dist/
+    - rm -rf node_modules/
+    - rm -rf packages/*/node_modules/
+    - echo "✅ Cleanup completed"
+  when: always
+
+# Job stages
+stages:
+  - validate
+  - sync
+  - build
+  - test
+  - publish
+  - commit
+  - cleanup
+
+# Webhook job (triggered by Figma webhooks)
+webhook_sync:
+  extends: .base_job
+  stage: sync
+  script:
+    - echo "🔗 Processing Figma webhook..."
+    - |
+      # Validate webhook secret
+      if [ -z "$FIGMA_WEBHOOK_SECRET" ]; then
+        echo "❌ FIGMA_WEBHOOK_SECRET is not set"
+        exit 1
+      fi
+    - |
+      # Parse webhook payload (if available)
+      if [ -n "$WEBHOOK_PAYLOAD" ]; then
+        echo "📥 Webhook payload received"
+        echo "$WEBHOOK_PAYLOAD" | jq . || echo "⚠️ Invalid JSON payload"
+      fi
+    - |
+      # Run sync
+      export FIGMA_FILE_KEY="$FIGMA_FILE_KEY"
+      export FIGMA_ACCESS_TOKEN="$FIGMA_ACCESS_TOKEN"
+      
+      if npm run sync:verbose; then
+        echo "✅ Webhook sync completed"
+      else
+        echo "❌ Webhook sync failed"
+        exit 1
+      fi
+  only:
+    variables:
+      - $CI_PIPELINE_SOURCE == "webhook"
+  dependencies:
+    - validate_security
+
+# Scheduled sync job
+scheduled_sync:
+  extends: .base_job
+  stage: sync
+  script:
+    - echo "⏰ Running scheduled Figma sync..."
+    - |
+      export FIGMA_FILE_KEY="$FIGMA_FILE_KEY"
+      export FIGMA_ACCESS_TOKEN="$FIGMA_ACCESS_TOKEN"
+      
+      if npm run sync:verbose; then
+        echo "✅ Scheduled sync completed"
+      else
+        echo "❌ Scheduled sync failed"
+        exit 1
+      fi
+  only:
+    - schedules
+  dependencies:
+    - validate_security
+
+# Release job (manual trigger)
+release:
+  extends: .base_job
+  stage: publish
+  script:
+    - echo "🚀 Creating release..."
+    - |
+      # Use nx release for version management
+      npx nx release --dry-run
+      
+      # Create git tag
+      version=$(node -e "console.log(require('./package.json').version)")
+      git tag -a "v$version" -m "Release v$version"
+      git push origin --tags
+      
+      echo "✅ Release v$version created"
+  only:
+    - main
+  when: manual
+  dependencies:
+    - test_packages

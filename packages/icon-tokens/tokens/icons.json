@@ -1,14 +1,20 @@
 {
   "icon": {
-    "hamburger": {
-      "value": "hamburger.svg",
+    "global-hamburger": {
+      "value": "global/hamburger.svg",
       "type": "asset",
-      "description": "Hamburger menu icon"
+      "description": "Hamburger menu icon",
+      "brand": "global",
+      "name": "hamburger",
+      "originalName": "hamburger"
     },
-    "ice-cream": {
-      "value": "ice-cream.svg",
+    "global-ice-cream": {
+      "value": "global/ice-cream.svg",
       "type": "asset",
-      "description": "Ice cream icon"
+      "description": "Ice cream icon",
+      "brand": "global",
+      "name": "ice-cream",
+      "originalName": "ice-cream"
     }
   }
 }
